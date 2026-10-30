@@ -339,9 +339,6 @@ public class EndlessPoolsUdpPlugin extends Plugin {
             @Override
             public void run() {
                 try {
-                    if (speechRecognizer == null) {
-                        initSpeechRecognizer();
-                    }
                     shouldKeepSpeechListening = true;
                     startNativeListening();
                     JSObject res = new JSObject();
@@ -376,108 +373,153 @@ public class EndlessPoolsUdpPlugin extends Plugin {
         });
     }
 
-    private void initSpeechRecognizer() {
-        Context ctx = getContext().getApplicationContext();
-        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-            Log.w(TAG, "SpeechRecognizer is not available on this device");
-            return;
+    public void onPermissionGranted() {
+        if (shouldKeepSpeechListening) {
+            mainHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    startNativeListening();
+                }
+            }, 200);
         }
+    }
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx);
-        speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");
-        speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+    private void initSpeechRecognizer() {
+        if (getActivity() == null) return;
 
-        // 1. Force Google Tensor G3 On-Device Neural Model (Ultra-low latency, immune to Wi-Fi drops)
-        speechIntent.putExtra("android.speech.extra.PREFER_OFFLINE", true);
-
-        // 2. Vocabulary Biasing: Boost neural network beam search for pool commands over ambient music
-        ArrayList<String> biasKeywords = new ArrayList<>();
-        biasKeywords.add("stop");
-        biasKeywords.add("start");
-        biasKeywords.add("pause");
-        biasKeywords.add("resume");
-        biasKeywords.add("faster");
-        biasKeywords.add("slower");
-        biasKeywords.add("up 5");
-        biasKeywords.add("up five");
-        biasKeywords.add("down 5");
-        biasKeywords.add("down five");
-        biasKeywords.add("hydro stop");
-        biasKeywords.add("hydro start");
-        biasKeywords.add("pool stop");
-        biasKeywords.add("pool start");
-        biasKeywords.add("stop stop");
-        biasKeywords.add("start start");
-        speechIntent.putStringArrayListExtra("android.speech.extra.BIASING_STRINGS", biasKeywords);
-
-        // 3. Ultra-responsive silence thresholds for rapid music recovery
-        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 100L);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 300L);
-        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 200L);
-
-        speechRecognizer.setRecognitionListener(new RecognitionListener() {
-            @Override
-            public void onReadyForSpeech(Bundle params) {
-                isSpeechListening = true;
-                notifySpeechState(true, null);
+        try {
+            if (speechRecognizer != null) {
+                try {
+                    speechRecognizer.cancel();
+                    speechRecognizer.destroy();
+                } catch (Exception ignored) {}
+                speechRecognizer = null;
             }
 
-            @Override
-            public void onBeginningOfSpeech() {}
+            // MUST use Activity context for SpeechRecognizer on Android
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getActivity());
 
-            @Override
-            public void onRmsChanged(float rmsdB) {}
+            speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");
+            speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+            speechIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getActivity().getPackageName());
 
-            @Override
-            public void onBufferReceived(byte[] buffer) {}
+            // Vocabulary Biasing: Boost neural network beam search for pool commands over ambient music
+            ArrayList<String> biasKeywords = new ArrayList<>();
+            biasKeywords.add("stop");
+            biasKeywords.add("start");
+            biasKeywords.add("pause");
+            biasKeywords.add("resume");
+            biasKeywords.add("faster");
+            biasKeywords.add("slower");
+            biasKeywords.add("up 5");
+            biasKeywords.add("up five");
+            biasKeywords.add("down 5");
+            biasKeywords.add("down five");
+            biasKeywords.add("hydro stop");
+            biasKeywords.add("hydro start");
+            biasKeywords.add("pool stop");
+            biasKeywords.add("pool start");
+            biasKeywords.add("stop stop");
+            biasKeywords.add("start start");
+            speechIntent.putStringArrayListExtra("android.speech.extra.BIASING_STRINGS", biasKeywords);
 
-            @Override
-            public void onEndOfSpeech() {}
+            speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override
+                public void onReadyForSpeech(Bundle params) {
+                    isSpeechListening = true;
+                    notifySpeechState(true, null);
+                }
 
-            @Override
-            public void onError(int error) {
-                Log.d(TAG, "SpeechRecognizer status code: " + error);
-                // Errors 6 (SPEECH_TIMEOUT) and 7 (NO_MATCH) are routine when music or splashing is heard
-                if (shouldKeepSpeechListening) {
-                    mainHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (shouldKeepSpeechListening) {
-                                startNativeListening();
-                            }
+                @Override
+                public void onBeginningOfSpeech() {}
+
+                @Override
+                public void onRmsChanged(float rmsdB) {}
+
+                @Override
+                public void onBufferReceived(byte[] buffer) {}
+
+                @Override
+                public void onEndOfSpeech() {}
+
+                @Override
+                public void onError(int error) {
+                    Log.d(TAG, "SpeechRecognizer status code: " + error);
+
+                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        isSpeechListening = false;
+                        notifySpeechState(false, "Microphone permission required");
+                        return;
+                    }
+
+                    if (shouldKeepSpeechListening) {
+                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                            mainHandler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (shouldKeepSpeechListening) {
+                                        recreateSpeechRecognizer();
+                                    }
+                                }
+                            }, 300);
+                        } else {
+                            mainHandler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (shouldKeepSpeechListening) {
+                                        startNativeListening();
+                                    }
+                                }
+                            }, 200);
                         }
-                    }, 120);
-                } else {
-                    isSpeechListening = false;
-                    notifySpeechState(false, "Code " + error);
+                    } else {
+                        isSpeechListening = false;
+                        notifySpeechState(false, "Code " + error);
+                    }
+                }
+
+                @Override
+                public void onResults(Bundle results) {
+                    handleSpeechResults(results);
+                    if (shouldKeepSpeechListening) {
+                        mainHandler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (shouldKeepSpeechListening) {
+                                    startNativeListening();
+                                }
+                            }
+                        }, 200);
+                    }
+                }
+
+                @Override
+                public void onPartialResults(Bundle partialResults) {
+                    handleSpeechResults(partialResults);
+                }
+
+                @Override
+                public void onEvent(int eventType, Bundle params) {}
+            });
+            Log.d(TAG, "SpeechRecognizer initialized successfully with Activity context");
+        } catch (Exception e) {
+            Log.e(TAG, "SpeechRecognizer init failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void recreateSpeechRecognizer() {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                initSpeechRecognizer();
+                if (shouldKeepSpeechListening) {
+                    startNativeListening();
                 }
             }
-
-            @Override
-            public void onResults(Bundle results) {
-                handleSpeechResults(results);
-                if (shouldKeepSpeechListening) {
-                    mainHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (shouldKeepSpeechListening) {
-                                startNativeListening();
-                            }
-                        }
-                    }, 150);
-                }
-            }
-
-            @Override
-            public void onPartialResults(Bundle partialResults) {
-                handleSpeechResults(partialResults);
-            }
-
-            @Override
-            public void onEvent(int eventType, Bundle params) {}
         });
     }
 
@@ -500,15 +542,27 @@ public class EndlessPoolsUdpPlugin extends Plugin {
     }
 
     private void startNativeListening() {
-        if (speechRecognizer != null && speechIntent != null) {
-            try {
-                speechRecognizer.startListening(speechIntent);
-                isSpeechListening = true;
-                notifySpeechState(true, null);
-            } catch (Exception e) {
-                Log.e(TAG, "SpeechRecognizer start error", e);
+        if (getActivity() == null || getActivity().isFinishing()) return;
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (speechRecognizer == null) {
+                        initSpeechRecognizer();
+                    }
+                    if (speechRecognizer != null && speechIntent != null) {
+                        speechRecognizer.cancel();
+                        speechRecognizer.startListening(speechIntent);
+                        isSpeechListening = true;
+                        notifySpeechState(true, null);
+                        Log.d(TAG, "SpeechRecognizer listening started successfully");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "SpeechRecognizer start error", e);
+                    recreateSpeechRecognizer();
+                }
             }
-        }
+        });
     }
 
     private void notifySpeechState(boolean listening, String err) {
