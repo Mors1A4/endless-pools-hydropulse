@@ -5,6 +5,7 @@ import { audioCoach } from '../services/audioCoach';
 import { wakeLock } from '../services/wakeLock';
 import { poolConnection } from '../services/poolConnection';
 import { voiceCommands, VoiceState, VoiceCommand } from '../services/voiceCommands';
+import { voiceProfileService } from '../services/voiceProfile';
 
 interface PoolsideHUDProps {
   workout: SwimWorkout;
@@ -27,6 +28,7 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [paceOffset, setPaceOffset] = useState<number>(0);
   const [voiceState, setVoiceState] = useState<VoiceState>(() => voiceCommands.getState());
+  const [isCalibratingNoise, setIsCalibratingNoise] = useState(false);
 
   const lastAnnouncedSec = useRef<number>(-1);
   const segments = workout.segments;
@@ -179,8 +181,19 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
   };
 
   useEffect(() => {
+    let isCancelled = false;
+
     if (settings.voiceCommandsEnabled) {
-      voiceCommands.startListening();
+      setIsCalibratingNoise(true);
+      // Automatically and silently calibrate today's ambient sound (pool jets + music)
+      voiceProfileService.autoCalibrateAmbientBackground(2500)
+        .catch(() => {})
+        .finally(() => {
+          if (!isCancelled) {
+            setIsCalibratingNoise(false);
+            voiceCommands.startListening();
+          }
+        });
     }
 
     const unsubState = voiceCommands.subscribeState(s => setVoiceState(s));
@@ -200,6 +213,7 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
     });
 
     return () => {
+      isCancelled = true;
       unsubState();
       unsubCmd();
       voiceCommands.stopListening();
@@ -243,11 +257,13 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
         {/* Hands-Free Voice Status Banner */}
         <div className="flex items-center justify-between px-3 py-1 rounded-xl bg-white border border-water-200 text-xs">
           <div className="flex items-center gap-1.5 min-w-0 pr-1">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            <span className={`w-2 h-2 rounded-full shrink-0 ${isCalibratingNoise ? 'bg-amber-400 animate-ping' : (voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300')}`} />
             <span className="font-bold text-slate-700 text-xs truncate">
-              {voiceState.isListening
-                ? (voiceState.hasVoiceProfile ? 'Voice Match: Say "Stop"' : 'Voice Active: Say "Stop" or "Pool Stop"')
-                : 'Voice Muted'}
+              {isCalibratingNoise
+                ? 'Tuning to pool noise...'
+                : (voiceState.isListening
+                    ? (voiceState.hasVoiceProfile ? 'Voice Match: Say "Stop"' : 'Voice Active: Say "Stop"')
+                    : 'Voice Muted')}
             </span>
           </div>
 

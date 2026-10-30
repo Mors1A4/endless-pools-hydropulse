@@ -28,6 +28,19 @@ export interface VoiceProfile {
 }
 
 const STORAGE_KEY = 'hydropulse_voice_profile_v1';
+const ONBOARDING_KEY = 'hydropulse_voice_onboarding_dismissed';
+
+export function hasDismissedVoiceOnboarding(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  return localStorage.getItem(ONBOARDING_KEY) === 'true';
+}
+
+export function setDismissedVoiceOnboarding(dismissed: boolean = true): void {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(ONBOARDING_KEY, dismissed ? 'true' : 'false');
+  }
+}
+
 const SAMPLE_RATE = 16000;
 const FRAME_SIZE = 400; // 25ms at 16kHz
 const FRAME_STEP = 160; // 10ms at 16kHz
@@ -587,6 +600,25 @@ class VoiceProfileService {
         });
       }, durationMs);
     });
+  }
+
+  /**
+   * Silently measure ambient sound level in background when a workout begins,
+   * dynamically adapting the noise gate to today's music volume and water turbulence.
+   */
+  public async autoCalibrateAmbientBackground(durationMs: number = 3000): Promise<{ noiseFloorRms: number; noiseFloorDb: number }> {
+    try {
+      const res = await this.calibrateNoiseFloor(durationMs);
+      const profile = this.getProfile();
+      if (profile) {
+        profile.noiseFloorRms = res.noiseFloorRms;
+        profile.noiseFloorDb = res.noiseFloorDb;
+        this.saveProfile(profile);
+      }
+      return res;
+    } catch (e) {
+      return { noiseFloorRms: 0.015, noiseFloorDb: -36 };
+    }
   }
 
   /**

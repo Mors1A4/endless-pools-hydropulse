@@ -3,7 +3,9 @@ import { AppSettings, SwimWorkout } from '../types/workout';
 import { paceToNotch, notchToPace } from '../services/protocolEngine';
 import { generateSmartWorkout, loadLastWorkoutConfig, saveLastWorkoutConfig } from '../services/storage';
 import { voiceCommands, VoiceState, VoiceCommand } from '../services/voiceCommands';
+import { voiceProfileService, hasDismissedVoiceOnboarding } from '../services/voiceProfile';
 import { audioCoach } from '../services/audioCoach';
+import { VoiceEnrollmentModal } from './VoiceEnrollmentModal';
 
 interface QuickWorkoutBuilderProps {
   settings: AppSettings;
@@ -39,6 +41,16 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
 
   // Voice Command Listener State
   const [voiceState, setVoiceState] = useState<VoiceState>(() => voiceCommands.getState());
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+
+  const handleStartSwim = () => {
+    // If first-time user hasn't enrolled voice and hasn't skipped, show 15s quick voice setup
+    if (settings.voiceCommandsEnabled && !voiceProfileService.hasProfile() && !hasDismissedVoiceOnboarding()) {
+      setShowOnboarding(true);
+      return;
+    }
+    onStartWorkout(generatedWorkout);
+  };
 
   // Auto-save this phone's settings whenever changed
   useEffect(() => {
@@ -78,7 +90,7 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
       if (cmd === 'start') {
         audioCoach.speak('Starting swim');
         voiceCommands.stopListening();
-        onStartWorkout(generatedWorkout);
+        handleStartSwim();
       } else if (cmd === 'faster' || cmd === 'up5') {
         const delta = cmd === 'up5' ? 5 : 1;
         setTargetNotch(prev => {
@@ -117,7 +129,7 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
       <div className="w-full space-y-1">
         <button
           type="button"
-          onClick={() => onStartWorkout(generatedWorkout)}
+          onClick={handleStartSwim}
           className="w-full h-12 sm:h-14 rounded-2xl bg-water-600 hover:bg-water-700 active:bg-water-800 text-white font-black text-base sm:text-lg tracking-wider flex items-center justify-center shadow-xs transition-all"
         >
           START SWIM
@@ -328,6 +340,17 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
           </button>
         </div>
       </div>
+
+      {/* First-time Swimmer 15s Voice Setup Modal */}
+      <VoiceEnrollmentModal
+        isOpen={showOnboarding}
+        isOnboarding={true}
+        onClose={() => setShowOnboarding(false)}
+        onCompleteWorkoutStart={() => {
+          setShowOnboarding(false);
+          onStartWorkout(generatedWorkout);
+        }}
+      />
     </div>
   );
 };

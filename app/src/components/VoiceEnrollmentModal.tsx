@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { registerPlugin } from '@capacitor/core';
-import { voiceProfileService, VoiceTemplate, VoiceProfile } from '../services/voiceProfile';
+import { voiceProfileService, VoiceTemplate, VoiceProfile, setDismissedVoiceOnboarding } from '../services/voiceProfile';
 import { audioCoach } from '../services/audioCoach';
 import { poolConnection } from '../services/poolConnection';
 
@@ -14,6 +14,8 @@ interface VoiceEnrollmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProfileUpdated?: () => void;
+  onCompleteWorkoutStart?: () => void;
+  isOnboarding?: boolean;
 }
 
 type EnrollmentStep = 'noise' | 'start' | 'stop' | 'test';
@@ -21,9 +23,11 @@ type EnrollmentStep = 'noise' | 'start' | 'stop' | 'test';
 export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
   isOpen,
   onClose,
-  onProfileUpdated
+  onProfileUpdated,
+  onCompleteWorkoutStart,
+  isOnboarding = false
 }) => {
-  const [step, setStep] = useState<EnrollmentStep>('noise');
+  const [step, setStep] = useState<EnrollmentStep>(isOnboarding ? 'start' : 'noise');
   const [isRecording, setIsRecording] = useState(false);
   const [liveRms, setLiveRms] = useState(0);
   const [progressPct, setProgressPct] = useState(0);
@@ -197,7 +201,19 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
     voiceProfileService.saveProfile(profile);
     audioCoach.speak('Voice profile saved');
     if (onProfileUpdated) onProfileUpdated();
+    if (isOnboarding && onCompleteWorkoutStart) {
+      onCompleteWorkoutStart();
+    } else {
+      onClose();
+    }
+  };
+
+  const handleSkipOnboarding = () => {
+    setDismissedVoiceOnboarding(true);
     onClose();
+    if (onCompleteWorkoutStart) {
+      onCompleteWorkoutStart();
+    }
   };
 
   const handleClearProfile = () => {
@@ -220,61 +236,70 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
         <div className="flex items-center justify-between pb-2 border-b border-water-200">
           <div>
             <h3 className="text-base font-black text-slate-900 tracking-wide uppercase">
-              Voice Match Setup
+              {isOnboarding ? 'Voice Setup (15s)' : 'Voice Match Setup'}
             </h3>
             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-              On-Device Acoustic Profile
+              {isOnboarding ? 'First-Time Swimmer Setup' : 'On-Device Acoustic Profile'}
             </span>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={isOnboarding ? handleSkipOnboarding : onClose}
             className="px-3 py-1 rounded-xl bg-water-50 hover:bg-water-100 text-slate-600 font-bold text-xs"
           >
-            Close
+            {isOnboarding ? 'Skip' : 'Close'}
           </button>
         </div>
 
-        {/* Step Tabs: Typographic only, zero icons */}
-        <div className="grid grid-cols-4 gap-1 p-1 bg-water-50 rounded-2xl text-[11px] font-black uppercase text-center">
-          <button
-            type="button"
-            onClick={() => setStep('noise')}
-            className={`py-1.5 rounded-xl transition-all ${
-              step === 'noise' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
-            }`}
-          >
-            Noise
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep('start')}
-            className={`py-1.5 rounded-xl transition-all ${
-              step === 'start' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
-            }`}
-          >
-            Start
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep('stop')}
-            className={`py-1.5 rounded-xl transition-all ${
-              step === 'stop' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
-            }`}
-          >
-            Stop
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep('test')}
-            className={`py-1.5 rounded-xl transition-all ${
-              step === 'test' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
-            }`}
-          >
-            Test
-          </button>
-        </div>
+        {/* Step Indicator / Tabs */}
+        {isOnboarding ? (
+          <div className="flex items-center justify-between px-3 py-2 bg-water-50 rounded-2xl text-xs font-black text-water-950">
+            <span>{step === 'start' ? 'Step 1 of 2: START Phrase' : 'Step 2 of 2: STOP Phrase'}</span>
+            <span className="text-[11px] text-slate-400 font-bold font-mono">
+              {step === 'start' ? `${startTakes.length}/3 takes` : `${stopTakes.length}/3 takes`}
+            </span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-1 p-1 bg-water-50 rounded-2xl text-[11px] font-black uppercase text-center">
+            <button
+              type="button"
+              onClick={() => setStep('noise')}
+              className={`py-1.5 rounded-xl transition-all ${
+                step === 'noise' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Noise
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('start')}
+              className={`py-1.5 rounded-xl transition-all ${
+                step === 'start' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Start
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('stop')}
+              className={`py-1.5 rounded-xl transition-all ${
+                step === 'stop' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Stop
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('test')}
+              className={`py-1.5 rounded-xl transition-all ${
+                step === 'test' ? 'bg-water-600 text-white shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Test
+            </button>
+          </div>
+        )}
 
         {/* Live Audio Energy Meter */}
         <div className="space-y-1">
@@ -498,23 +523,53 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
               {isRecording ? 'Listening for STOP...' : `Record Take ${Math.min(3, stopTakes.length + 1)} of 3`}
             </button>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStep('start')}
-                className="flex-1 h-10 rounded-2xl bg-white border border-slate-200 text-slate-600 font-black text-xs uppercase tracking-wider"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                disabled={stopTakes.length === 0}
-                onClick={() => setStep('test')}
-                className="flex-1 h-10 rounded-2xl bg-water-600 hover:bg-water-700 disabled:opacity-40 text-white font-black text-xs uppercase tracking-wider"
-              >
-                Next: Test
-              </button>
-            </div>
+            {isOnboarding ? (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  disabled={startTakes.length === 0 || stopTakes.length === 0}
+                  onClick={handleSaveProfile}
+                  className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 text-white font-black text-xs uppercase tracking-wider shadow-md transition-all"
+                >
+                  SAVE & START SWIM
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('start')}
+                    className="flex-1 h-9 rounded-xl bg-white border border-slate-200 text-slate-600 font-bold text-xs"
+                  >
+                    Back to Start
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSkipOnboarding}
+                    className="flex-1 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50"
+                  >
+                    Skip Setup
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStep('start')}
+                  className="flex-1 h-10 rounded-2xl bg-white border border-slate-200 text-slate-600 font-black text-xs uppercase tracking-wider"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={stopTakes.length === 0}
+                  onClick={() => setStep('test')}
+                  className="flex-1 h-10 rounded-2xl bg-water-600 hover:bg-water-700 disabled:opacity-40 text-white font-black text-xs uppercase tracking-wider"
+                >
+                  Next: Test
+                </button>
+              </div>
+            )}
           </div>
         )}
 
