@@ -1,9 +1,9 @@
 {
-  "version": "2.5.3",
-  "name": "HydroPulse v2.5.3 Release",
-  "notes": "First-time 15s voice onboarding on first swim start, and automatic background ambient noise calibration on every workout",
+  "version": "2.5.4",
+  "name": "HydroPulse v2.5.4 Release",
+  "notes": "Fix microphone calibration: Add MODIFY_AUDIO_SETTINGS permission and universal audio constraint fallback to resolve could not find audio source",
   "publishedAt": "2026-10-30T11:15:00Z",
-  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.5.3/hydropulse.apk",
-  "apkSize": 4141286,
-  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.5.3"
+  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.5.4/hydropulse.apk",
+  "apkSize": 4141078,
+  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.5.4"
 }

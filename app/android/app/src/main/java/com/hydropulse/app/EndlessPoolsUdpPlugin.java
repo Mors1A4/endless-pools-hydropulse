@@ -360,18 +360,27 @@ public class EndlessPoolsUdpPlugin extends Plugin {
 
     @PluginMethod
     public void requestMicrophonePermission(PluginCall call) {
-        boolean granted = androidx.core.content.ContextCompat.checkSelfPermission(
+        if (getActivity() == null) {
+            call.reject("Activity unavailable");
+            return;
+        }
+
+        boolean audioGranted = androidx.core.content.ContextCompat.checkSelfPermission(
             getActivity(), 
             android.Manifest.permission.RECORD_AUDIO
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
-        if (granted) {
+
+        if (audioGranted) {
             JSObject res = new JSObject();
             res.put("granted", true);
             call.resolve(res);
         } else {
             androidx.core.app.ActivityCompat.requestPermissions(
                 getActivity(),
-                new String[]{android.Manifest.permission.RECORD_AUDIO},
+                new String[]{
+                    android.Manifest.permission.RECORD_AUDIO,
+                    android.Manifest.permission.MODIFY_AUDIO_SETTINGS
+                },
                 201
             );
             JSObject res = new JSObject();

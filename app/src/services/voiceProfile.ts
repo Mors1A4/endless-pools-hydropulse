@@ -474,6 +474,48 @@ class VoiceProfileService {
   private isSpotting = false;
 
   /**
+   * Universal microphone stream acquisition helper.
+   * Tries ideal constraints first; immediately falls back to universal { audio: true }
+   * to eliminate OverconstrainedError ("could not find audio source") on Android hardware.
+   */
+  public async acquireMicrophone(mode: 'raw' | 'speech' = 'speech'): Promise<MediaStream> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Microphone access is not supported in this environment');
+    }
+
+    // 1. Soft ideal constraints (never strict booleans that fail Android hardware HAL)
+    try {
+      const idealConstraints: MediaStreamConstraints = {
+        audio: mode === 'raw'
+          ? {
+              echoCancellation: { ideal: false },
+              noiseSuppression: { ideal: false },
+              autoGainControl: { ideal: false }
+            }
+          : {
+              echoCancellation: { ideal: true },
+              noiseSuppression: { ideal: false },
+              autoGainControl: { ideal: false }
+            }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(idealConstraints);
+      if (stream && stream.getAudioTracks().length > 0) {
+        return stream;
+      }
+    } catch (err) {
+      console.warn('Ideal audio constraints rejected, falling back to universal audio', err);
+    }
+
+    // 2. Universal fallback: basic audio: true (100% supported on every Android HAL and browser)
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err: any) {
+      console.error('Universal audio acquisition failed', err);
+      throw err;
+    }
+  }
+
+  /**
    * Capture a single utterance of fixed duration (e.g. 1.5s for "start" or "stop").
    * Used during the 3-take voice enrollment flow.
    */
@@ -481,20 +523,14 @@ class VoiceProfileService {
     durationMs: number = 1500,
     onRmsUpdate?: (rms: number) => void
   ): Promise<Float32Array> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Microphone access is not supported in this environment');
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: false, // Keep raw speech harmonics for MFCC accuracy
-        autoGainControl: false
-      }
-    });
+    const stream = await this.acquireMicrophone('speech');
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     const audioCtx = new AudioContextClass();
+    if (audioCtx.state === 'suspended') {
+      try { await audioCtx.resume(); } catch {}
+    }
+
     const source = audioCtx.createMediaStreamSource(stream);
     const processor = audioCtx.createScriptProcessor(2048, 1, 1);
 
@@ -550,16 +586,14 @@ class VoiceProfileService {
     durationMs: number = 4000,
     onProgress?: (progressPct: number, currentRms: number) => void
   ): Promise<{ noiseFloorRms: number; noiseFloorDb: number }> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Microphone access is not supported');
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    });
+    const stream = await this.acquireMicrophone('raw');
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     const audioCtx = new AudioContextClass();
+    if (audioCtx.state === 'suspended') {
+      try { await audioCtx.resume(); } catch {}
+    }
+
     const source = audioCtx.createMediaStreamSource(stream);
     const processor = audioCtx.createScriptProcessor(2048, 1, 1);
 
@@ -640,16 +674,13 @@ class VoiceProfileService {
     }
 
     try {
-      this.liveStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: false
-        }
-      });
+      this.liveStream = await this.acquireMicrophone('speech');
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       this.liveAudioCtx = new AudioContextClass();
+      if (this.liveAudioCtx.state === 'suspended') {
+        try { await this.liveAudioCtx.resume(); } catch {}
+      }
       const source = this.liveAudioCtx.createMediaStreamSource(this.liveStream);
       this.liveProcessor = this.liveAudioCtx.createScriptProcessor(2048, 1, 1);
 

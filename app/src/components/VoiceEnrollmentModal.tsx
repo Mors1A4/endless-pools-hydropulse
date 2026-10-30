@@ -3,6 +3,7 @@ import { registerPlugin } from '@capacitor/core';
 import { voiceProfileService, VoiceTemplate, VoiceProfile, setDismissedVoiceOnboarding } from '../services/voiceProfile';
 import { audioCoach } from '../services/audioCoach';
 import { poolConnection } from '../services/poolConnection';
+import { voiceCommands } from '../services/voiceCommands';
 
 interface NativeAudioPlugin {
   openAppSettings?: () => Promise<void>;
@@ -69,6 +70,11 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
       }
       return;
     }
+
+    // Free any speech recognizer holding the hardware microphone
+    try {
+      voiceCommands.stopListening();
+    } catch {}
 
     // Check existing profile
     const existing = voiceProfileService.getProfile();
@@ -145,7 +151,12 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
     } catch (e: any) {
       if (connected) poolConnection.stopMotor();
       const msg = String(e?.message || e || '');
-      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+      const isMicIssue = msg.toLowerCase().includes('permission') ||
+                          msg.toLowerCase().includes('notallowed') ||
+                          msg.toLowerCase().includes('source') ||
+                          msg.toLowerCase().includes('readable') ||
+                          msg.toLowerCase().includes('found');
+      if (isMicIssue) {
         setPermissionError(true);
         NativeAudio.requestMicrophonePermission?.().catch(() => {});
       } else {
@@ -176,7 +187,12 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
       audioCoach.playCommandChirp();
     } catch (e: any) {
       const msg = String(e?.message || e || '');
-      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+      const isMicIssue = msg.toLowerCase().includes('permission') ||
+                          msg.toLowerCase().includes('notallowed') ||
+                          msg.toLowerCase().includes('source') ||
+                          msg.toLowerCase().includes('readable') ||
+                          msg.toLowerCase().includes('found');
+      if (isMicIssue) {
         setPermissionError(true);
         NativeAudio.requestMicrophonePermission?.().catch(() => {});
       } else {
