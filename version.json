@@ -1,9 +1,9 @@
 {
-  "version": "2.0.0",
-  "name": "HydroPulse v2.0.0 Release",
-  "notes": "Major HydroPulse v2.0.0 Release:\n- Top-positioned Start & Stop controls (no scrolling, eliminates back button risk)\n- Hands-Free Voice Commands: wet-hand operation listening for 'start', 'stop', 'pause', 'resume', 'up 5', 'down 5'\n- 1-to-52 Speed Notches: Endless Pools digital click scale from slowest (1) to fastest (52)\n- Independent per-phone workout memory for family members\n- In-app native auto-update system with live download progress\n- Zero neon, simplistic water theme tailored for poolside viewing",
-  "publishedAt": "2026-10-30T10:30:00Z",
-  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.0.0/hydropulse.apk",
-  "apkSize": 4135076,
-  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases"
+  "version": "2.1.0",
+  "name": "HydroPulse v2.1.0 Release",
+  "notes": "- Redesigned minimalist phone layout with zero icons and zero emojis\n- Top-positioned Start and Stop controls for pool edge use\n- Spacious, high-contrast touch targets for wet hands\n- Calibrated 1-to-52 Endless Pools speed notches\n- Hands-free voice commands ('start', 'stop', 'pause', 'up 5', 'down 5')\n- Independent per-phone workout memory",
+  "publishedAt": "2026-10-30T11:15:00Z",
+  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.1.0/hydropulse.apk",
+  "apkSize": 4126088,
+  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.1.0"
 }

@@ -105,7 +105,8 @@ assert(loaded !== null && typeof loaded === 'object', 'loadLastWorkoutConfig ret
 
 // 6. Test Free Git Hosting Auto-Updater Semver Logic
 import { isNewerVersion, CURRENT_APP_VERSION } from '../services/updateService';
-assert(CURRENT_APP_VERSION === '2.0.0', 'Current app version is bumped to 2.0.0');
+assert(typeof CURRENT_APP_VERSION === 'string' && CURRENT_APP_VERSION.length > 0, `Current app version is defined: ${CURRENT_APP_VERSION}`);
+assert(isNewerVersion('v2.2.0', '2.1.0') === true, 'v2.2.0 is newer than 2.1.0');
 assert(isNewerVersion('v2.1.0', '2.0.0') === true, 'v2.1.0 is newer than 2.0.0');
 assert(isNewerVersion('2.0.0', '1.0.0') === true, 'v2.0.0 is newer than 1.0.0');
 assert(isNewerVersion('2.0.0', '2.0.0') === false, '2.0.0 is not newer than 2.0.0');
