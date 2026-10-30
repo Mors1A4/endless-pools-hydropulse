@@ -9,5 +9,7 @@ app/android/local.properties
 .DS_Store
 Thumbs.db
 *.log
+__pycache__/
+*.pyc
 
 *.apk
