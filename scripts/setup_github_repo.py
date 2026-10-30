@@ -4,17 +4,16 @@ import json
 import subprocess
 import os
 import sys
+import re
 
-# Read token dynamically from environment or Git Credential Manager (never hardcoded in source)
+# Read token dynamically from environment or local git remote config (never hardcoded in source)
 TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 if not TOKEN:
     try:
-        p = subprocess.Popen(['git', 'credential', 'fill'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        out, _ = p.communicate('protocol=https\nhost=github.com\n\n')
-        for line in out.splitlines():
-            if line.startswith('password='):
-                TOKEN = line.split('=', 1)[1].strip()
-                break
+        url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], text=True).strip()
+        m = re.search(r'gh[op]_[A-Za-z0-9_]+', url)
+        if m:
+            TOKEN = m.group(0)
     except Exception:
         pass
 
