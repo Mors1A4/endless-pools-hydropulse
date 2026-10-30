@@ -334,6 +334,52 @@ public class EndlessPoolsUdpPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            Uri uri = Uri.fromParts("package", getActivity().getPackageName(), null);
+            intent.setData(uri);
+            getActivity().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not open settings: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void checkMicrophonePermission(PluginCall call) {
+        boolean granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            getActivity(), 
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        JSObject res = new JSObject();
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestMicrophonePermission(PluginCall call) {
+        boolean granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            getActivity(), 
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if (granted) {
+            JSObject res = new JSObject();
+            res.put("granted", true);
+            call.resolve(res);
+        } else {
+            androidx.core.app.ActivityCompat.requestPermissions(
+                getActivity(),
+                new String[]{android.Manifest.permission.RECORD_AUDIO},
+                201
+            );
+            JSObject res = new JSObject();
+            res.put("granted", false);
+            call.resolve(res);
+        }
+    }
+
     // Native Voice Recognition Methods for Wet Hands Poolside Control
     @PluginMethod
     public void startSpeechRecognition(PluginCall call) {

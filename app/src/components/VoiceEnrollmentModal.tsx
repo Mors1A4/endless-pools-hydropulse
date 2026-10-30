@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { registerPlugin } from '@capacitor/core';
 import { voiceProfileService, VoiceTemplate, VoiceProfile } from '../services/voiceProfile';
 import { audioCoach } from '../services/audioCoach';
 import { poolConnection } from '../services/poolConnection';
+
+interface NativeAudioPlugin {
+  openAppSettings?: () => Promise<void>;
+  requestMicrophonePermission?: () => Promise<{ granted: boolean }>;
+}
+const NativeAudio = registerPlugin<NativeAudioPlugin>('EndlessPoolsUdp');
 
 interface VoiceEnrollmentModalProps {
   isOpen: boolean;
@@ -22,6 +29,7 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
   const [progressPct, setProgressPct] = useState(0);
   const [isPoolConnected, setIsPoolConnected] = useState<boolean>(() => poolConnection.getStatus().connected);
   const [jetCalStatus, setJetCalStatus] = useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState(false);
 
   // Calibration state
   const [noiseFloorDb, setNoiseFloorDb] = useState<number | null>(() => {
@@ -132,7 +140,13 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
       setJetCalStatus(connected ? 'Jets calibrated & shut off' : 'Noise floor calibrated');
     } catch (e: any) {
       if (connected) poolConnection.stopMotor();
-      alert(e?.message || 'Could not access microphone');
+      const msg = String(e?.message || e || '');
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setPermissionError(true);
+        NativeAudio.requestMicrophonePermission?.().catch(() => {});
+      } else {
+        alert(msg || 'Could not access microphone');
+      }
     } finally {
       setIsRecording(false);
       setLiveRms(0);
@@ -143,6 +157,7 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
   const handleRecordTake = async (phrase: 'start' | 'stop') => {
     setIsRecording(true);
     setLiveRms(0);
+    setPermissionError(false);
     try {
       const pcm16k = await voiceProfileService.recordUtterance(1500, (rms) => {
         setLiveRms(rms);
@@ -156,7 +171,13 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
       }
       audioCoach.playCommandChirp();
     } catch (e: any) {
-      alert(e?.message || 'Recording failed');
+      const msg = String(e?.message || e || '');
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setPermissionError(true);
+        NativeAudio.requestMicrophonePermission?.().catch(() => {});
+      } else {
+        alert(msg || 'Recording failed');
+      }
     } finally {
       setIsRecording(false);
       setLiveRms(0);
@@ -302,6 +323,36 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
               </div>
             ) : null}
 
+            {permissionError && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-center space-y-2">
+                <span className="text-xs font-black text-amber-900 uppercase block">
+                  Microphone Access Required
+                </span>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Please enable Microphone permission in Android Settings so HydroPulse can listen for commands.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => NativeAudio.openAppSettings?.()}
+                    className="flex-1 h-9 rounded-xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-black text-[11px] uppercase tracking-wider"
+                  >
+                    Open Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPermissionError(false);
+                      handleCalibrateNoise();
+                    }}
+                    className="flex-1 h-9 rounded-xl bg-white border border-amber-300 text-amber-900 font-black text-[11px] uppercase tracking-wider"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               disabled={isRecording}
@@ -345,6 +396,24 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
                 {startTakes.length} of 3
               </span>
             </div>
+
+            {permissionError && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-center space-y-2">
+                <span className="text-xs font-black text-amber-900 uppercase block">
+                  Microphone Access Required
+                </span>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Please enable Microphone permission in Android Settings.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => NativeAudio.openAppSettings?.()}
+                  className="w-full h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase"
+                >
+                  Open Settings
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
@@ -397,6 +466,24 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
                 {stopTakes.length} of 3
               </span>
             </div>
+
+            {permissionError && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-center space-y-2">
+                <span className="text-xs font-black text-amber-900 uppercase block">
+                  Microphone Access Required
+                </span>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Please enable Microphone permission in Android Settings.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => NativeAudio.openAppSettings?.()}
+                  className="w-full h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase"
+                >
+                  Open Settings
+                </button>
+              </div>
+            )}
 
             <button
               type="button"

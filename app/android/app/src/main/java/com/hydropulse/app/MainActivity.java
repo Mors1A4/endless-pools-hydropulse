@@ -3,10 +3,12 @@ package com.hydropulse.app;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.webkit.PermissionRequest;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.PluginHandle;
 
 public class MainActivity extends BridgeActivity {
@@ -26,6 +28,32 @@ public class MainActivity extends BridgeActivity {
                 REQ_AUDIO_PERMISSION
             );
         }
+
+        setupWebViewPermissions();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setupWebViewPermissions();
+    }
+
+    private void setupWebViewPermissions() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
+                    @Override
+                    public void onPermissionRequest(final PermissionRequest request) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                request.grant(request.getResources());
+                            }
+                        });
+                    }
+                });
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override
