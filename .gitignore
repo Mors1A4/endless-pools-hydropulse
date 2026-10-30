@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.gradle/
+build/
+app/android/.gradle/
+app/android/build/
+app/android/app/build/
+app/android/local.properties
+.DS_Store
+Thumbs.db
+*.log
+
+*.apk

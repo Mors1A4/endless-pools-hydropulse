@@ -1,0 +1,147 @@
+const $ = (id) => document.getElementById(id);
+const pauseBtn = $("pauseBtn");
+const returnBtn = $("returnBtn");
+
+// Parse ?id=workoutId from URL
+const params = new URLSearchParams(location.search);
+const workoutId = params.get("id");
+
+const es = new EventSource("/events");
+
+// Escape user-supplied text before it goes anywhere near innerHTML.
+const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+es.addEventListener("status", (e) => {
+  let st;
+  try { st = JSON.parse(e.data); } catch (_) { return; }
+
+  pauseBtn.textContent = st.paused ? "▶ Resume" : "⏸ Pause";
+  pauseBtn.setAttribute("aria-pressed", st.paused ? "true" : "false");
+
+  document.title = st.workout_title || "Workout Runner";
+
+  // Set progress ("Set 2 / 3") — firmware sends these while inside a set.
+  const setEl = $("runSet");
+  if (setEl) {
+    if (st.set_reps > 1) {
+      setEl.textContent = `Set ${st.set_rep} / ${st.set_reps}`;
+      setEl.hidden = false;
+    } else {
+      setEl.hidden = true;
+    }
+  }
+
+  let timeLeftMSecs = 0;
+  if (st.remaining_swims && st.remaining_swims.length > 0) {
+    const currentSwim = st.remaining_swims[0];
+    timeLeftMSecs = Math.max(0, currentSwim.durSec*1000 - Math.floor(st.elapsed_ms));
+  }
+  let timeLeftSecs = Math.ceil(timeLeftMSecs / 1000);
+  const mins = Math.floor(timeLeftSecs / 60).toString().padStart(2, '0');
+  const secs = (timeLeftSecs % 60).toString().padStart(2, '0');
+  $("runTime").textContent = `${mins}:${secs}`;
+
+  if (st.remaining_swims && st.remaining_swims.length > 0) {
+    const pace = st.remaining_swims[0].pace100s || 0;
+    
+    if (pace === 0) {
+      $("runPace").style.display = "none";
+      $("runDist").style.display = "none";
+      $("runNote").textContent = st.current_step_note || "Rest";
+    } else {
+      $("runPace").style.display = "";
+      $("runDist").style.display = "";
+      const paceMin = Math.floor(pace / 60);
+      const paceSec = pace % 60;
+      $("runPace").textContent = `Pace: ${paceMin}:${paceSec.toString().padStart(2, "0")} /100m`;
+      
+      $("runNote").textContent = st.current_step_note || "Swim";
+      const distLeft = Math.round((timeLeftMSecs / 10) / pace);
+      $("runDist").textContent = distLeft + " m";
+      // Show pace as mm:ss/100m
+    }
+  } else {
+    $("runDist").textContent = "";
+    $("runPace").textContent = "";
+  }
+
+  updateTimeBigMode();
+
+  if (st.remaining_swims && st.remaining_swims.length > 1) {
+    let tableHtml = `<table id="queueTable" aria-label="Upcoming swim steps">
+      <thead>
+        <tr>
+          <th>Dist</th>
+          <th>Pace</th>
+          <th>Time</th>
+          <th>Note</th>
+        </tr>
+      </thead><tbody>`;
+    st.remaining_swims.slice(1).forEach((s) => {
+      const isRest = s.pace100s === 0;
+      const distance = isRest ? "Rest" : `${Math.round(s.durSec * 100 / s.pace100s)}m`;
+      const paceMin = Math.floor((s.pace100s || 0) / 60);
+      const paceSec = (s.pace100s || 0) % 60;
+      const pace = isRest ? "—" : `${paceMin}:${paceSec.toString().padStart(2, "0")}`;
+      const totalMin = Math.floor(s.durSec / 60);
+      const totalSec = s.durSec % 60;
+      const totalTime = `${totalMin}:${totalSec.toString().padStart(2, "0")}`;
+      const note = esc(s.note || "");
+      const inSet = s.set_reps > 1 ? ' class="in-set"' : "";
+
+      tableHtml += `<tr${inSet}>
+        <td>${distance}</td>
+        <td>${pace}</td>
+        <td>${totalTime}</td>
+        <td>${note}</td>
+      </tr>`;
+    });
+
+    tableHtml += "</tbody></table>";
+    $("queueList").innerHTML = tableHtml;
+  } else {
+    $("queueList").innerHTML = "<em>No upcoming steps</em>";
+  }
+
+  // Show/hide Pause and Return buttons based on workout running status.
+  // "" (not block/inline-block) keeps them flex children of #runControls.
+  if (!st.running) {
+    pauseBtn.style.display = "none";
+    returnBtn.style.display = "";
+  } else {
+    pauseBtn.style.display = "";
+    returnBtn.style.display = "none";
+  }
+  if (st.paused) {
+    returnBtn.style.display = "";
+  }
+});
+
+pauseBtn.onclick = async () => {
+  await fetch("/api/pause", { method: "POST" });
+  // SSE updates status, so no UI update needed here
+};
+
+returnBtn.onclick = async () => {
+  try {
+    await fetch('/api/stop', { method: 'POST' });
+  } catch (e) {
+    console.error('Failed to stop workout:', e);
+  }
+  window.location.href = '/';
+};
+function updateTimeBigMode() {
+  const isMobileLandscape = window.innerWidth > window.innerHeight;
+  const runTime = $("runTime");
+  if (isMobileLandscape) {
+    runTime.classList.add("superbig");
+  } else {
+    runTime.classList.remove("superbig");
+  }
+}
+
+// Add event listener to toggle on orientation change or resize
+window.addEventListener("resize", updateTimeBigMode);
+window.addEventListener("orientationchange", updateTimeBigMode);

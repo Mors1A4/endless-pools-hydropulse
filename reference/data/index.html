@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0077cc" />
+  <title>Swim Workouts</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ============ Route #/  – full-screen workout list ============ -->
+  <section id="listView" class="view">
+    <header class="topbar">
+      <span class="topbar-slot"></span>
+      <h1 class="topbar-title">Workouts</h1>
+      <a class="btn-icon" href="/settings.html" aria-label="Settings">⚙</a>
+    </header>
+
+    <div class="view-body">
+      <ul id="workoutList" class="list" aria-label="Workouts"></ul>
+      <p id="listEmpty" class="empty" hidden>No workouts yet — tap “New workout”.</p>
+    </div>
+
+    <div class="bottom-bar">
+      <button id="newBtn">＋ New workout</button>
+    </div>
+  </section>
+
+  <!-- ============ Route #/w/:id – full-screen workout view ============ -->
+  <section id="workoutView" class="view" hidden>
+    <header class="topbar">
+      <button id="backBtn" class="btn-icon" aria-label="Back to workouts">‹</button>
+      <h1 id="wTitle" class="topbar-title">Workout</h1>
+      <button id="editBtn" class="btn-icon" aria-label="Edit workout">✎</button>
+    </header>
+
+    <div class="view-body">
+      <label id="titleRow" class="field-row" hidden>
+        <span class="field-label">Title</span>
+        <input id="titleIn" type="text" placeholder="Workout name" />
+      </label>
+
+      <p id="wSummary" class="summary"></p>
+
+      <ol id="itemList" class="items" aria-label="Swim segments"></ol>
+
+      <div id="addTools" hidden>
+        <div class="add-target">
+          <span>Adding to <strong id="addTargetLbl">workout</strong></span>
+          <button id="addTargetReset" class="btn-small" hidden>↩ workout</button>
+        </div>
+        <add-swim id="addRow"></add-swim>
+        <button id="addSetBtn" class="btn-secondary">➕ Add set (repeat ×N)</button>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <button id="startBtn">▶ Start</button>
+      <button id="saveBtn" disabled>💾 Save</button>
+      <button id="delBtn" class="btn-danger" aria-label="Delete workout">🗑</button>
+    </div>
+  </section>
+
+  <script type="module" src="/static/add-swim.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

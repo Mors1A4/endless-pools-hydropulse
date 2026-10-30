@@ -1,0 +1,11 @@
+{
+  "appId": "com.hydropulse.app",
+  "appName": "HydroPulse",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

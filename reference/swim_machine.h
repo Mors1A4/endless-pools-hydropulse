@@ -1,0 +1,43 @@
+#pragma once
+#include <Arduino.h>
+#include <vector>
+
+namespace SwimMachine
+{
+
+  /* -------- one swim block --------------------------------------- */
+  struct Segment
+  {
+    uint16_t pace100s; // seconds / 100 m; 0 = rest
+    uint16_t durSec;   // seconds
+  };
+
+  /* -------- status snapshot -------------------------------------- */
+    struct SwimStatus
+    {
+      bool active;        // workout started & not finished
+      bool found;
+      bool paused;        // true while paused
+      int32_t idx;        // current segment, −1 = none
+      uint32_t elapsedMs; // ms elapsed inside current segment
+    };
+
+  /* -------- public API ------------------------------------------- */
+  void begin(); // call in setup()
+  void setPushNetworkEvent(void (*push_network_event)(const uint8_t *data, size_t len)); // set network event callback
+  void loadWorkout(const std::vector<Segment> &); // copy full list
+  bool start();                                   // begin playback
+  void pause();                                   // toggle pause/resume
+  void stop();                                    // abort workout
+  void tick();                                    // call in loop()
+  void setPeerIP(IPAddress ip);
+  bool isMachineFound();
+
+  // Dry run: build and report packets as usual but never transmit them, so a
+  // workout can be exercised without driving the actual swim machine.
+  void setDryRun(bool on);
+  bool isDryRun();
+
+  SwimStatus getStatus(); // query live state
+
+} // namespace SwimMachine
