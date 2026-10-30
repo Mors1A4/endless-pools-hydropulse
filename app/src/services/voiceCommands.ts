@@ -2,7 +2,13 @@
  * Hands-Free Voice Command Listener for Endless Pools
  * Listens for voice code words ("start", "stop", "pause", "resume", "faster", "slower", "up 5", "down 5")
  * Enables wet-hand operation without touching the phone screen or triggering Android navigation buttons.
+ * 
+ * Supports both:
+ * 1. Native Android Google SpeechRecognizer on Pixel 8 / Android devices via Capacitor plugin.
+ * 2. Standard Web Speech API (webkitSpeechRecognition) on Chrome / desktop.
  */
+
+import { registerPlugin, Capacitor } from '@capacitor/core';
 
 export type VoiceCommand = 'start' | 'stop' | 'pause' | 'resume' | 'faster' | 'slower' | 'up5' | 'down5';
 
@@ -17,6 +23,14 @@ export interface VoiceState {
 type CommandListener = (cmd: VoiceCommand, rawPhrase: string) => void;
 type StateListener = (state: VoiceState) => void;
 
+interface NativeSpeechPlugin {
+  startSpeechRecognition?: () => Promise<{ success: boolean }>;
+  stopSpeechRecognition?: () => Promise<{ success: boolean }>;
+  addListener?: (eventName: string, listenerFunc: (data: any) => void) => Promise<any>;
+}
+
+const NativePlugin = registerPlugin<NativeSpeechPlugin>('EndlessPoolsUdp');
+
 // Web Speech API interface declarations
 interface IWindowWithSpeech extends Window {
   SpeechRecognition?: any;
@@ -25,6 +39,7 @@ interface IWindowWithSpeech extends Window {
 
 class VoiceCommandService {
   private recognition: any = null;
+  private isNative = false;
   private isSupported = false;
   private isListening = false;
   private shouldBeListening = false;
@@ -37,7 +52,32 @@ class VoiceCommandService {
   private restartTimeout: any = null;
 
   constructor() {
-    if (typeof window !== 'undefined') {
+    this.isNative = Capacitor.isNativePlatform();
+
+    if (this.isNative) {
+      // 1. Android Native SpeechRecognizer Mode
+      this.isSupported = true;
+      try {
+        NativePlugin.addListener?.('speechResult', (data: { transcript: string }) => {
+          if (data && data.transcript) {
+            this.lastHeard = data.transcript;
+            this.notifyState();
+            this.evaluateTranscript(data.transcript);
+          }
+        });
+
+        NativePlugin.addListener?.('speechState', (data: { isListening: boolean; error?: string }) => {
+          this.isListening = data.isListening;
+          if (data.error) {
+            this.error = data.error;
+          }
+          this.notifyState();
+        });
+      } catch (e: any) {
+        this.error = e?.message || 'Native speech init error';
+      }
+    } else if (typeof window !== 'undefined') {
+      // 2. Web Speech API Mode (Chrome / Desktop Browser)
       const win = window as IWindowWithSpeech;
       const SpeechClass = win.SpeechRecognition || win.webkitSpeechRecognition;
       if (SpeechClass) {
@@ -60,7 +100,6 @@ class VoiceCommandService {
           };
 
           this.recognition.onerror = (event: any) => {
-            // 'no-speech' is routine in background listening
             if (event.error !== 'no-speech') {
               this.error = event.error;
             }
@@ -70,7 +109,6 @@ class VoiceCommandService {
           this.recognition.onend = () => {
             this.isListening = false;
             this.notifyState();
-            // Automatically keep listening if enabled (handles WebView silence disconnects)
             if (this.shouldBeListening) {
               clearTimeout(this.restartTimeout);
               this.restartTimeout = setTimeout(() => {
@@ -89,16 +127,21 @@ class VoiceCommandService {
   }
 
   private startInternal(): void {
-    if (!this.recognition || !this.isSupported) return;
-    try {
-      this.recognition.start();
-    } catch (e: any) {
-      // If already started or transitioning, ignore
+    if (this.isNative) {
+      NativePlugin.startSpeechRecognition?.().catch(() => {});
+      this.isListening = true;
+      this.notifyState();
+    } else if (this.recognition && this.isSupported) {
+      try {
+        this.recognition.start();
+      } catch {
+        // Ignore transition errors
+      }
     }
   }
 
   public startListening(): boolean {
-    if (!this.isSupported || !this.recognition) return false;
+    if (!this.isSupported) return false;
     this.shouldBeListening = true;
     this.error = null;
     this.startInternal();
@@ -108,12 +151,12 @@ class VoiceCommandService {
   public stopListening(): void {
     this.shouldBeListening = false;
     clearTimeout(this.restartTimeout);
-    if (this.recognition && this.isListening) {
+    if (this.isNative) {
+      NativePlugin.stopSpeechRecognition?.().catch(() => {});
+    } else if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
-      } catch {
-        // Ignore stop error
-      }
+      } catch {}
     }
     this.isListening = false;
     this.notifyState();
@@ -131,7 +174,7 @@ class VoiceCommandService {
   public getState(): VoiceState {
     return {
       isSupported: this.isSupported,
-      isListening: this.isListening && this.shouldBeListening,
+      isListening: this.isListening || (this.shouldBeListening && this.isNative),
       lastCommand: this.lastCommand,
       lastHeard: this.lastHeard,
       error: this.error
@@ -177,8 +220,8 @@ class VoiceCommandService {
   public evaluateTranscript(transcript: string, bypassDebounce = false): VoiceCommand | null {
     const text = transcript.toLowerCase();
     const now = Date.now();
-    // Debounce: minimum 1000ms between parsed commands during live microphone stream
-    if (!bypassDebounce && now - this.lastCommandTime < 1000) return null;
+    // Debounce: minimum 800ms between parsed commands
+    if (!bypassDebounce && now - this.lastCommandTime < 800) return null;
 
     let recognizedCmd: VoiceCommand | null = null;
 

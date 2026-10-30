@@ -125,21 +125,25 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
           START SWIM
         </button>
 
-        {/* Voice status banner: minimal, clean */}
+        {/* Voice status banner: clear, intuitive, hands-free */}
         <div className="flex items-center justify-between px-2.5 py-1 rounded-xl bg-white border border-water-200 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${voiceState.isListening ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-            <span className="font-bold text-slate-700 text-[11px] sm:text-xs">
-              {voiceState.isListening ? 'Voice: Say "Start"' : 'Voice: Off'}
+          <div className="flex items-center gap-1.5 min-w-0 pr-1">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            <span className="font-bold text-slate-700 text-[11px] sm:text-xs truncate">
+              {voiceState.isListening ? 'Voice Ready: Say "Start"' : 'Voice Muted (Tap to enable)'}
             </span>
           </div>
 
           <button
             type="button"
             onClick={() => voiceCommands.toggle()}
-            className="px-2 py-0.5 rounded-lg text-[10px] font-bold border border-water-300 text-slate-700 hover:bg-water-50"
+            className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 ${
+              voiceState.isListening
+                ? 'border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100'
+                : 'border-water-300 text-slate-700 bg-white hover:bg-water-50'
+            }`}
           >
-            {voiceState.isListening ? 'MIC ON' : 'MIC OFF'}
+            {voiceState.isListening ? 'MUTE' : 'ENABLE'}
           </button>
         </div>
       </div>

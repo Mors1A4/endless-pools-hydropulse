@@ -5,8 +5,14 @@ import android.content.Intent;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import androidx.core.content.FileProvider;
 
@@ -27,6 +33,7 @@ import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
 import java.net.NetworkInterface;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,6 +53,13 @@ public class EndlessPoolsUdpPlugin extends Plugin {
 
     // Single-thread executor for guaranteed in-order FIFO command packet transmission
     private ExecutorService sendExecutor = null;
+
+    // Native Speech Recognizer for Hands-Free Swimming Voice Commands
+    private SpeechRecognizer speechRecognizer = null;
+    private Intent speechIntent = null;
+    private boolean isSpeechListening = false;
+    private boolean shouldKeepSpeechListening = false;
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @PluginMethod
     public void startListener(PluginCall call) {
@@ -318,6 +332,157 @@ public class EndlessPoolsUdpPlugin extends Plugin {
         });
     }
 
+    // Native Voice Recognition Methods for Wet Hands Poolside Control
+    @PluginMethod
+    public void startSpeechRecognition(PluginCall call) {
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (speechRecognizer == null) {
+                        initSpeechRecognizer();
+                    }
+                    shouldKeepSpeechListening = true;
+                    startNativeListening();
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    call.resolve(res);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to start speech recognition: " + e.getMessage(), e);
+                    call.reject("Failed to start speech recognition: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    @PluginMethod
+    public void stopSpeechRecognition(PluginCall call) {
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                shouldKeepSpeechListening = false;
+                if (speechRecognizer != null) {
+                    try {
+                        speechRecognizer.stopListening();
+                        speechRecognizer.cancel();
+                    } catch (Exception ignored) {}
+                }
+                isSpeechListening = false;
+                notifySpeechState(false, null);
+                JSObject res = new JSObject();
+                res.put("success", true);
+                call.resolve(res);
+            }
+        });
+    }
+
+    private void initSpeechRecognizer() {
+        Context ctx = getContext().getApplicationContext();
+        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
+            Log.w(TAG, "SpeechRecognizer is not available on this device");
+            return;
+        }
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx);
+        speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");
+        speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                isSpeechListening = true;
+                notifySpeechState(true, null);
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {}
+
+            @Override
+            public void onRmsChanged(float rmsdB) {}
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {}
+
+            @Override
+            public void onEndOfSpeech() {}
+
+            @Override
+            public void onError(int error) {
+                Log.d(TAG, "SpeechRecognizer status code: " + error);
+                if (shouldKeepSpeechListening) {
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (shouldKeepSpeechListening) {
+                                startNativeListening();
+                            }
+                        }
+                    }, 400);
+                } else {
+                    isSpeechListening = false;
+                    notifySpeechState(false, "Code " + error);
+                }
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                handleSpeechResults(results);
+                if (shouldKeepSpeechListening) {
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (shouldKeepSpeechListening) {
+                                startNativeListening();
+                            }
+                        }
+                    }, 300);
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                handleSpeechResults(partialResults);
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {}
+        });
+    }
+
+    private void handleSpeechResults(Bundle results) {
+        if (results == null) return;
+        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (matches != null && !matches.isEmpty()) {
+            String bestMatch = matches.get(0);
+            Log.d(TAG, "Speech recognized: " + bestMatch);
+            JSObject data = new JSObject();
+            data.put("transcript", bestMatch);
+            notifyListeners("speechResult", data);
+        }
+    }
+
+    private void startNativeListening() {
+        if (speechRecognizer != null && speechIntent != null) {
+            try {
+                speechRecognizer.startListening(speechIntent);
+                isSpeechListening = true;
+                notifySpeechState(true, null);
+            } catch (Exception e) {
+                Log.e(TAG, "SpeechRecognizer start error", e);
+            }
+        }
+    }
+
+    private void notifySpeechState(boolean listening, String err) {
+        JSObject data = new JSObject();
+        data.put("isListening", listening);
+        if (err != null) data.put("error", err);
+        notifyListeners("speechState", data);
+    }
+
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
@@ -326,6 +491,13 @@ public class EndlessPoolsUdpPlugin extends Plugin {
 
     private void cleanup() {
         isRunning = false;
+        shouldKeepSpeechListening = false;
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.destroy();
+                speechRecognizer = null;
+            } catch (Exception ignored) {}
+        }
         if (sendExecutor != null) {
             sendExecutor.shutdownNow();
             sendExecutor = null;
