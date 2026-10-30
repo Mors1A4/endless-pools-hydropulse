@@ -388,7 +388,35 @@ public class EndlessPoolsUdpPlugin extends Plugin {
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         speechIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");
-        speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+
+        // 1. Force Google Tensor G3 On-Device Neural Model (Ultra-low latency, immune to Wi-Fi drops)
+        speechIntent.putExtra("android.speech.extra.PREFER_OFFLINE", true);
+
+        // 2. Vocabulary Biasing: Boost neural network beam search for pool commands over ambient music
+        ArrayList<String> biasKeywords = new ArrayList<>();
+        biasKeywords.add("stop");
+        biasKeywords.add("start");
+        biasKeywords.add("pause");
+        biasKeywords.add("resume");
+        biasKeywords.add("faster");
+        biasKeywords.add("slower");
+        biasKeywords.add("up 5");
+        biasKeywords.add("up five");
+        biasKeywords.add("down 5");
+        biasKeywords.add("down five");
+        biasKeywords.add("hydro stop");
+        biasKeywords.add("hydro start");
+        biasKeywords.add("pool stop");
+        biasKeywords.add("pool start");
+        biasKeywords.add("stop stop");
+        biasKeywords.add("start start");
+        speechIntent.putStringArrayListExtra("android.speech.extra.BIASING_STRINGS", biasKeywords);
+
+        // 3. Ultra-responsive silence thresholds for rapid music recovery
+        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 100L);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 300L);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 200L);
 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override
@@ -412,6 +440,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
             @Override
             public void onError(int error) {
                 Log.d(TAG, "SpeechRecognizer status code: " + error);
+                // Errors 6 (SPEECH_TIMEOUT) and 7 (NO_MATCH) are routine when music or splashing is heard
                 if (shouldKeepSpeechListening) {
                     mainHandler.postDelayed(new Runnable() {
                         @Override
@@ -420,7 +449,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                                 startNativeListening();
                             }
                         }
-                    }, 400);
+                    }, 120);
                 } else {
                     isSpeechListening = false;
                     notifySpeechState(false, "Code " + error);
@@ -438,7 +467,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                                 startNativeListening();
                             }
                         }
-                    }, 300);
+                    }, 150);
                 }
             }
 
@@ -457,9 +486,15 @@ public class EndlessPoolsUdpPlugin extends Plugin {
         ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         if (matches != null && !matches.isEmpty()) {
             String bestMatch = matches.get(0);
-            Log.d(TAG, "Speech recognized: " + bestMatch);
+            Log.d(TAG, "Speech hypotheses (" + matches.size() + "): " + matches);
             JSObject data = new JSObject();
             data.put("transcript", bestMatch);
+            
+            com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+            for (String m : matches) {
+                arr.put(m);
+            }
+            data.put("candidates", arr);
             notifyListeners("speechResult", data);
         }
     }

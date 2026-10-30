@@ -1,9 +1,9 @@
 {
-  "version": "2.2.0",
-  "name": "HydroPulse v2.2.0 Release",
-  "notes": "Added native Android Google SpeechRecognizer bridge for hands-free poolside voice commands ('start', 'stop', 'pause', 'up 5', 'down 5')",
+  "version": "2.3.0",
+  "name": "HydroPulse v2.3.0 Release",
+  "notes": "Acoustic AI Voice Upgrade: Multi-hypothesis neural beam-search, vocabulary biasing, and music-immune wake phrases ('pool stop', 'hydro stop', 'stop stop') with acoustic feedback chirp.",
   "publishedAt": "2026-10-30T11:15:00Z",
-  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.2.0/hydropulse.apk",
-  "apkSize": 4129612,
-  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.2.0"
+  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.3.0/hydropulse.apk",
+  "apkSize": 4130853,
+  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.3.0"
 }

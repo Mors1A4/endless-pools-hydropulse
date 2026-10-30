@@ -130,7 +130,7 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
           <div className="flex items-center gap-1.5 min-w-0 pr-1">
             <span className={`w-2 h-2 rounded-full shrink-0 ${voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
             <span className="font-bold text-slate-700 text-[11px] sm:text-xs truncate">
-              {voiceState.isListening ? 'Voice Ready: Say "Start"' : 'Voice Muted (Tap to enable)'}
+              {voiceState.isListening ? 'Voice Ready: Say "Start" or "Pool Start"' : 'Voice Muted (Tap to enable)'}
             </span>
           </div>
 

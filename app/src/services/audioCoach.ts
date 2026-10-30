@@ -158,6 +158,35 @@ class AudioCoachService {
     }
   }
 
+  /**
+   * High-salience tactile acoustic chirp to confirm voice commands through loud pool music
+   */
+  public playCommandChirp(): void {
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.12);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(Math.max(0.7, this.chimeVolume), now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch {
+      // Fallback
+    }
+  }
+
   private playVictoryArpeggio(): void {
     const ctx = this.ensureAudioContext();
     if (!ctx) return;

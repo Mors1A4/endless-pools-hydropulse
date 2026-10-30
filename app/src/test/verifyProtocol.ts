@@ -131,7 +131,7 @@ for (let n = 1; n < 52; n++) {
 }
 assert(strictlyMonotonic, 'All 52 notches strictly accelerate monotonically from 1 (slowest) to 52 (fastest)');
 
-// 8. Test Hands-Free Voice Commands Evaluation
+// 8. Test Hands-Free Voice Commands Evaluation (Music-Immune & Multi-Hypothesis)
 import { voiceCommands } from '../services/voiceCommands';
 assert(voiceCommands.evaluateTranscript('start', true) === 'start', 'Spoken "start" triggers start command');
 assert(voiceCommands.evaluateTranscript('stop swim', true) === 'stop', 'Spoken "stop swim" triggers stop command');
@@ -141,6 +141,27 @@ assert(voiceCommands.evaluateTranscript('i need to go up 5 notches', true) === '
 assert(voiceCommands.evaluateTranscript('go down 5 notches', true) === 'down5', 'Spoken "down 5 notches" triggers down5 command');
 assert(voiceCommands.evaluateTranscript('faster', true) === 'faster', 'Spoken "faster" triggers faster command');
 assert(voiceCommands.evaluateTranscript('slower', true) === 'slower', 'Spoken "slower" triggers slower command');
+
+// 9. Test Music-Immune Wake Phrases & Background Music Resilience
+assert(voiceCommands.evaluateTranscript('playing loud music hydro stop', true) === 'stop', 'Wake phrase "hydro stop" cuts through music lyrics');
+assert(voiceCommands.evaluateTranscript('pool stop', true) === 'stop', 'Wake phrase "pool stop" cuts through music');
+assert(voiceCommands.evaluateTranscript('stop stop', true) === 'stop', 'Double vocal "stop stop" recognized');
+assert(voiceCommands.evaluateTranscript('hydro start', true) === 'start', 'Wake phrase "hydro start" recognized');
+assert(voiceCommands.evaluateTranscript('bump 5', true) === 'up5', '"bump 5" triggers up5');
+assert(voiceCommands.evaluateTranscript('drop 5', true) === 'down5', '"drop 5" triggers down5');
+
+// 10. Test Multi-Hypothesis Beam Search Candidates (Music masking primary candidate)
+const candidateTest = voiceCommands.evaluateMultiHypothesis(
+  'dancing in the rain beat', // Candidate 0 (music lyrics captured by mic)
+  ['loud music', 'hydro stop', 'yeah'], // Candidate 1 has the swimmer's voice command
+  true
+);
+assert(candidateTest === 'stop', 'Multi-hypothesis beam search extracts command from candidate list when music masks candidate 0');
+
+// 11. Test Phonetic & Eroded Consonant Recovery (Splash Noise)
+assert(voiceCommands.evaluateTranscript('stopp', true) === 'stop', 'Eroded consonant "stopp" recovered to stop');
+assert(voiceCommands.evaluateTranscript('tart', true) === 'start', 'Eroded consonant "tart" recovered to start');
+assert(voiceCommands.evaluateTranscript('paws', true) === 'pause', 'Phonetic "paws" recovered to pause');
 
 console.log(`\n================================`);
 console.log(`Test Results: ${passed} Passed, ${failed} Failed`);
