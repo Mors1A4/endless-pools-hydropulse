@@ -11,6 +11,7 @@
 
 import { registerPlugin, Capacitor } from '@capacitor/core';
 import { audioCoach } from './audioCoach';
+import { voiceProfileService } from './voiceProfile';
 
 export type VoiceCommand = 'start' | 'stop' | 'pause' | 'resume' | 'faster' | 'slower' | 'up5' | 'down5';
 
@@ -20,6 +21,8 @@ export interface VoiceState {
   lastCommand: VoiceCommand | null;
   lastHeard: string;
   error: string | null;
+  hasVoiceProfile?: boolean;
+  activeEngine?: 'profile' | 'native';
 }
 
 type CommandListener = (cmd: VoiceCommand, rawPhrase: string) => void;
@@ -141,6 +144,24 @@ class VoiceCommandService {
   }
 
   private startInternal(): void {
+    // 1. If user has enrolled an on-device personal Voice Profile (Option B), activate acoustic spotter
+    if (voiceProfileService.hasProfile()) {
+      voiceProfileService.startLiveSpotter(
+        (phrase: string, confidence: number) => {
+          const cmd = phrase as VoiceCommand;
+          const now = Date.now();
+          if (now - this.lastCommandTime < 1000) return;
+          this.lastCommand = cmd;
+          this.lastCommandTime = now;
+          this.lastHeard = `${phrase} (${Math.round(confidence * 100)}% match)`;
+          this.notifyState();
+          audioCoach.playCommandChirp();
+          this.commandListeners.forEach(listener => listener(cmd, phrase));
+        }
+      ).catch(() => {});
+    }
+
+    // 2. Also run the native / Web Speech recognizer for beam search
     if (this.isNative) {
       NativePlugin.startSpeechRecognition?.().catch(() => {});
       this.isListening = true;
@@ -153,7 +174,8 @@ class VoiceCommandService {
   }
 
   public startListening(): boolean {
-    if (!this.isSupported) return false;
+    const hasProfile = voiceProfileService.hasProfile();
+    if (!this.isSupported && !hasProfile) return false;
     this.shouldBeListening = true;
     this.error = null;
     this.startInternal();
@@ -163,6 +185,7 @@ class VoiceCommandService {
   public stopListening(): void {
     this.shouldBeListening = false;
     clearTimeout(this.restartTimeout);
+    voiceProfileService.stopLiveSpotter();
     if (this.isNative) {
       NativePlugin.stopSpeechRecognition?.().catch(() => {});
     } else if (this.recognition && this.isListening) {
@@ -184,12 +207,15 @@ class VoiceCommandService {
   }
 
   public getState(): VoiceState {
+    const hasProfile = voiceProfileService.hasProfile();
     return {
-      isSupported: this.isSupported,
-      isListening: this.isListening || (this.shouldBeListening && this.isNative),
+      isSupported: this.isSupported || hasProfile,
+      isListening: this.isListening || (this.shouldBeListening && this.isNative) || voiceProfileService.isSpotterActive(),
       lastCommand: this.lastCommand,
       lastHeard: this.lastHeard,
-      error: this.error
+      error: this.error,
+      hasVoiceProfile: hasProfile,
+      activeEngine: hasProfile ? 'profile' : 'native'
     };
   }
 

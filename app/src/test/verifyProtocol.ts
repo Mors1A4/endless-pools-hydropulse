@@ -1,5 +1,6 @@
 import { computeCrc32, build44BytePacket, parse111BytePacket, paceToPercent, percentToPace } from '../services/protocolEngine';
 import { generateSmartWorkout } from '../services/storage';
+import { computeFFT, extractMFCC, computeDTWDistance, trimSilence, resampleTo16k, voiceProfileService } from '../services/voiceProfile';
 
 console.log('=== Running HydroPulse Automated Test Suite ===\n');
 
@@ -162,6 +163,98 @@ assert(candidateTest === 'stop', 'Multi-hypothesis beam search extracts command 
 assert(voiceCommands.evaluateTranscript('stopp', true) === 'stop', 'Eroded consonant "stopp" recovered to stop');
 assert(voiceCommands.evaluateTranscript('tart', true) === 'start', 'Eroded consonant "tart" recovered to start');
 assert(voiceCommands.evaluateTranscript('paws', true) === 'pause', 'Phonetic "paws" recovered to pause');
+
+// 12. Test Option B: On-Device Voice Profile & Acoustic Spotting DSP Math
+// A. Test FFT on 440 Hz Sine wave
+const fftN = 512;
+const sineWaveR = new Float32Array(fftN);
+const sineWaveI = new Float32Array(fftN);
+for (let i = 0; i < fftN; i++) {
+  sineWaveR[i] = Math.sin((2 * Math.PI * 440 * i) / 16000);
+}
+computeFFT(sineWaveR, sineWaveI);
+let peakBin = 0;
+let maxMag = 0;
+for (let k = 0; k < fftN / 2; k++) {
+  const mag = Math.sqrt(sineWaveR[k] * sineWaveR[k] + sineWaveI[k] * sineWaveI[k]);
+  if (mag > maxMag) {
+    maxMag = mag;
+    peakBin = k;
+  }
+}
+const peakFreq = (peakBin * 16000) / fftN;
+assert(Math.abs(peakFreq - 440) < 35, `FFT correctly identified 440Hz tone at bin ${peakBin} (${Math.round(peakFreq)}Hz)`);
+
+// B. Test Silence Trimming
+const paddedPcm = new Float32Array(16000); // 1 second
+for (let i = 4000; i < 8000; i++) {
+  paddedPcm[i] = 0.5 * Math.sin((2 * Math.PI * 500 * i) / 16000);
+}
+const trimmed = trimSilence(paddedPcm, 0.05);
+assert(trimmed.length < paddedPcm.length && trimmed.length >= 4000, `Silence trimming isolated active audio segment (${trimmed.length} samples)`);
+
+// C. Test MFCC Extraction
+const synthWord1 = new Float32Array(8000); // 0.5s "word 1" (formant frequencies 300Hz and 2200Hz)
+const synthWord2 = new Float32Array(8000); // 0.5s "word 2" (formant frequencies 800Hz and 1200Hz)
+for (let i = 0; i < 8000; i++) {
+  const env = Math.sin((Math.PI * i) / 8000);
+  synthWord1[i] = env * (0.6 * Math.sin((2 * Math.PI * 300 * i) / 16000) + 0.4 * Math.sin((2 * Math.PI * 2200 * i) / 16000));
+  synthWord2[i] = env * (0.6 * Math.sin((2 * Math.PI * 800 * i) / 16000) + 0.4 * Math.sin((2 * Math.PI * 1200 * i) / 16000));
+}
+const mfcc1 = extractMFCC(synthWord1);
+const mfcc2 = extractMFCC(synthWord2);
+assert(mfcc1.length > 10 && mfcc1[0].length === 13, `MFCC extraction produced ${mfcc1.length} frames of 13 coefficients`);
+
+// D. Test DTW Dynamic Time Warping Distance
+// Distance to itself should be 0.0
+const selfDist = computeDTWDistance(mfcc1, mfcc1);
+assert(selfDist < 0.001, `DTW self-distance is near zero (${selfDist.toFixed(4)})`);
+
+// Slightly time-stretched version of Word 1 (e.g. 15% slower pronunciation of same word)
+const synthWord1Stretched = new Float32Array(9200);
+for (let i = 0; i < 9200; i++) {
+  const env = Math.sin((Math.PI * i) / 9200);
+  synthWord1Stretched[i] = env * (0.6 * Math.sin((2 * Math.PI * 300 * i) / 16000) + 0.4 * Math.sin((2 * Math.PI * 2200 * i) / 16000));
+}
+const mfcc1Stretched = extractMFCC(synthWord1Stretched);
+const stretchDist = computeDTWDistance(mfcc1, mfcc1Stretched);
+assert(stretchDist < 0.20, `DTW matched time-stretched pronunciation with low distance (${stretchDist.toFixed(3)} < 0.20)`);
+
+// Distance between two completely different words (Word 1 vs Word 2)
+const diffDist = computeDTWDistance(mfcc1, mfcc2);
+assert(diffDist > stretchDist && diffDist > 0.25, `DTW clearly separated different words (diff distance ${diffDist.toFixed(3)} > 0.25)`);
+
+// E. Test Audio Resampling
+const audio48k = new Float32Array(48000); // 1 sec at 48kHz
+const resampled16k = resampleTo16k(audio48k, 48000);
+assert(resampled16k.length === 16000, `Resampled 48kHz (48,000 samples) to exactly 16kHz (${resampled16k.length} samples)`);
+
+// F. Test End-to-End Voice Profile Enrollment & Spotting
+const tStart = voiceProfileService.createTemplateFromPcm('start', synthWord1);
+const tStop = voiceProfileService.createTemplateFromPcm('stop', synthWord2);
+voiceProfileService.saveProfile({
+  version: 1,
+  createdAt: Date.now(),
+  noiseFloorRms: 0.01,
+  noiseFloorDb: -40,
+  templates: [tStart, tStop]
+});
+
+// Test matching "start" variant
+const matchStart = voiceProfileService.matchAudio(synthWord1Stretched);
+assert(matchStart !== null && matchStart.phrase === 'start', `Voice Match correctly spotted 'start' (confidence: ${Math.round((matchStart?.confidence || 0) * 100)}%)`);
+
+// Test matching "stop"
+const matchStop = voiceProfileService.matchAudio(synthWord2);
+assert(matchStop !== null && matchStop.phrase === 'stop', `Voice Match correctly spotted 'stop' (confidence: ${Math.round((matchStop?.confidence || 0) * 100)}%)`);
+
+// Test rejecting random noise / music beats (white noise + 60Hz hum)
+const noiseAudio = new Float32Array(8000);
+for (let i = 0; i < 8000; i++) {
+  noiseAudio[i] = (Math.random() - 0.5) * 0.2 + 0.3 * Math.sin((2 * Math.PI * 60 * i) / 16000);
+}
+const matchNoise = voiceProfileService.matchAudio(noiseAudio);
+assert(matchNoise === null, 'Voice Match correctly rejected random noise / music rumble');
 
 console.log(`\n================================`);
 console.log(`Test Results: ${passed} Passed, ${failed} Failed`);

@@ -10,7 +10,7 @@
 
 import { registerPlugin } from '@capacitor/core';
 
-export const CURRENT_APP_VERSION = '2.4.0';
+export const CURRENT_APP_VERSION = '2.5.0';
 export const DEFAULT_GIT_REPO = 'Mors1A4/endless-pools-hydropulse';
 
 export interface UpdateInfo {

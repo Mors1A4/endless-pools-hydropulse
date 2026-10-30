@@ -244,7 +244,9 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
           <div className="flex items-center gap-1.5 min-w-0 pr-1">
             <span className={`w-2 h-2 rounded-full shrink-0 ${voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
             <span className="font-bold text-slate-700 text-xs truncate">
-              {voiceState.isListening ? 'Voice Active: Say "Stop" or "Pool Stop"' : 'Voice Muted'}
+              {voiceState.isListening
+                ? (voiceState.hasVoiceProfile ? 'Voice Match: Say "Stop"' : 'Voice Active: Say "Stop" or "Pool Stop"')
+                : 'Voice Muted'}
             </span>
           </div>
 

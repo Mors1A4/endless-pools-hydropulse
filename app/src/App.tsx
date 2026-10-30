@@ -9,6 +9,7 @@ import { PoolsideHUD } from './components/PoolsideHUD';
 import { SettingsModal } from './components/SettingsModal';
 import { ConnectionModal } from './components/ConnectionModal';
 import { UpdateModal } from './components/UpdateModal';
+import { VoiceEnrollmentModal } from './components/VoiceEnrollmentModal';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(loadSettings());
@@ -18,6 +19,7 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConnectionOpen, setIsConnectionOpen] = useState(false);
   const [isUpdateOpen, setIsUpdateOpen] = useState(false);
+  const [isVoiceEnrollmentOpen, setIsVoiceEnrollmentOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   // Pool connection status
@@ -125,6 +127,12 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleUpdateSettings}
+        onOpenVoiceEnrollment={() => setIsVoiceEnrollmentOpen(true)}
+      />
+
+      <VoiceEnrollmentModal
+        isOpen={isVoiceEnrollmentOpen}
+        onClose={() => setIsVoiceEnrollmentOpen(false)}
       />
 
       <ConnectionModal

@@ -1,9 +1,9 @@
 {
-  "version": "2.4.0",
-  "name": "HydroPulse v2.4.0 Release",
-  "notes": "Fix speech recognizer activity context binding, calling package, and cancellation to ensure 100% reliable continuous listening on Pixel 8 and Android",
+  "version": "2.5.0",
+  "name": "HydroPulse v2.5.0 Release",
+  "notes": "On-device personal voice match (Option B): Offline acoustic enrollment, MFCC + Fast-DTW template spotting immune to loud music and splashing water.",
   "publishedAt": "2026-10-30T11:15:00Z",
-  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.4.0/hydropulse.apk",
-  "apkSize": 4131745,
-  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.4.0"
+  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.5.0/hydropulse.apk",
+  "apkSize": 4138136,
+  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.5.0"
 }

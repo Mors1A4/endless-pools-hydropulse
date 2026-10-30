@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { AppSettings } from '../types/workout';
+import { voiceProfileService } from '../services/voiceProfile';
 
 interface SettingsModalProps {
   settings: AppSettings;
   isOpen: boolean;
   onClose: () => void;
   onSave: (newSettings: AppSettings) => void;
+  onOpenVoiceEnrollment?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   isOpen,
   onClose,
-  onSave
+  onSave,
+  onOpenVoiceEnrollment
 }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+  const hasVoiceProfile = voiceProfileService.hasProfile();
 
   if (!isOpen) return null;
 
@@ -63,6 +67,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {localSettings.voiceCommandsEnabled ? 'ON' : 'OFF'}
           </button>
         </div>
+
+        {/* 1b. Personal Voice Match Calibration */}
+        {localSettings.voiceCommandsEnabled && (
+          <div className="p-3 bg-water-50/80 border border-water-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <span className="text-xs font-black text-water-950 uppercase block">
+                Personal Voice Match
+              </span>
+              <span className="text-[11px] font-bold text-slate-500">
+                {hasVoiceProfile ? 'Enrolled & Active' : 'Not calibrated'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenVoiceEnrollment?.();
+              }}
+              className="h-8 px-3 rounded-xl bg-water-600 hover:bg-water-700 active:bg-water-800 text-white font-black text-[11px] uppercase tracking-wider"
+            >
+              {hasVoiceProfile ? 'Recalibrate' : 'Calibrate'}
+            </button>
+          </div>
+        )}
 
         {/* 2. Voice Announcements Toggle */}
         <div className="flex items-center justify-between py-1">
