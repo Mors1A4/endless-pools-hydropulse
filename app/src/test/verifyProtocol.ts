@@ -161,8 +161,10 @@ assert(candidateTest === 'stop', 'Multi-hypothesis beam search extracts command 
 
 // 11. Test Phonetic & Eroded Consonant Recovery (Splash Noise)
 assert(voiceCommands.evaluateTranscript('stopp', true) === 'stop', 'Eroded consonant "stopp" recovered to stop');
-assert(voiceCommands.evaluateTranscript('tart', true) === 'start', 'Eroded consonant "tart" recovered to start');
+assert(voiceCommands.evaluateTranscript('startt', true) === 'start', 'Elongated spoken "startt" recovered to start');
 assert(voiceCommands.evaluateTranscript('paws', true) === 'pause', 'Phonetic "paws" recovered to pause');
+assert(voiceCommands.evaluateTranscript('step', true) === null, 'Ambient word "step" rejected to prevent false beeps');
+assert(voiceCommands.evaluateTranscript('shop', true) === null, 'Ambient word "shop" rejected to prevent false beeps');
 
 // 12. Test Option B: On-Device Voice Profile & Acoustic Spotting DSP Math
 // A. Test FFT on 440 Hz Sine wave

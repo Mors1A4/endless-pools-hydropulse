@@ -2,6 +2,7 @@ package com.hydropulse.app;
 
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -59,6 +60,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
     private Intent speechIntent = null;
     private boolean isSpeechListening = false;
     private boolean shouldKeepSpeechListening = false;
+    private int consecutiveSpeechErrors = 0;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @PluginMethod
@@ -430,6 +432,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                 @Override
                 public void onReadyForSpeech(Bundle params) {
                     isSpeechListening = true;
+                    consecutiveSpeechErrors = 0;
                     notifySpeechState(true, null);
                 }
 
@@ -447,11 +450,22 @@ public class EndlessPoolsUdpPlugin extends Plugin {
 
                 @Override
                 public void onError(int error) {
-                    Log.d(TAG, "SpeechRecognizer status code: " + error);
+                    consecutiveSpeechErrors++;
+                    Log.d(TAG, "SpeechRecognizer status code: " + error + " (consecutive: " + consecutiveSpeechErrors + ")");
 
                     if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                         isSpeechListening = false;
+                        shouldKeepSpeechListening = false;
                         notifySpeechState(false, "Microphone permission required");
+                        return;
+                    }
+
+                    // Throttle: If recognizer encounters 3 consecutive idle timeouts in a quiet room, pause gracefully
+                    if (consecutiveSpeechErrors >= 3) {
+                        Log.d(TAG, "SpeechRecognizer entering standby after 3 consecutive idle timeouts");
+                        isSpeechListening = false;
+                        shouldKeepSpeechListening = false;
+                        notifySpeechState(false, "Standby");
                         return;
                     }
 
@@ -464,7 +478,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                                         recreateSpeechRecognizer();
                                     }
                                 }
-                            }, 300);
+                            }, 800);
                         } else {
                             mainHandler.postDelayed(new Runnable() {
                                 @Override
@@ -473,7 +487,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                                         startNativeListening();
                                     }
                                 }
-                            }, 200);
+                            }, 1000);
                         }
                     } else {
                         isSpeechListening = false;
@@ -483,6 +497,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
 
                 @Override
                 public void onResults(Bundle results) {
+                    consecutiveSpeechErrors = 0;
                     handleSpeechResults(results);
                     if (shouldKeepSpeechListening) {
                         mainHandler.postDelayed(new Runnable() {
@@ -492,7 +507,7 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                                     startNativeListening();
                                 }
                             }
-                        }, 200);
+                        }, 500);
                     }
                 }
 
@@ -551,18 +566,42 @@ public class EndlessPoolsUdpPlugin extends Plugin {
                         initSpeechRecognizer();
                     }
                     if (speechRecognizer != null && speechIntent != null) {
+                        silenceSystemBeep(true);
                         speechRecognizer.cancel();
                         speechRecognizer.startListening(speechIntent);
                         isSpeechListening = true;
                         notifySpeechState(true, null);
                         Log.d(TAG, "SpeechRecognizer listening started successfully");
+                        mainHandler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                silenceSystemBeep(false);
+                            }
+                        }, 400);
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "SpeechRecognizer start error", e);
+                    silenceSystemBeep(false);
                     recreateSpeechRecognizer();
                 }
             }
         });
+    }
+
+    private void silenceSystemBeep(boolean mute) {
+        try {
+            if (getActivity() == null) return;
+            AudioManager am = (AudioManager) getActivity().getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                if (mute) {
+                    am.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0);
+                    am.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_MUTE, 0);
+                } else {
+                    am.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0);
+                    am.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_UNMUTE, 0);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void notifySpeechState(boolean listening, String err) {

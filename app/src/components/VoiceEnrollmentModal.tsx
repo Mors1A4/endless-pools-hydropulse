@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { voiceProfileService, VoiceTemplate, VoiceProfile } from '../services/voiceProfile';
 import { audioCoach } from '../services/audioCoach';
+import { poolConnection } from '../services/poolConnection';
 
 interface VoiceEnrollmentModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [liveRms, setLiveRms] = useState(0);
   const [progressPct, setProgressPct] = useState(0);
+  const [isPoolConnected, setIsPoolConnected] = useState<boolean>(() => poolConnection.getStatus().connected);
+  const [jetCalStatus, setJetCalStatus] = useState<string | null>(null);
 
   // Calibration state
   const [noiseFloorDb, setNoiseFloorDb] = useState<number | null>(() => {
@@ -41,9 +44,17 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
   const isTestingRef = useRef(false);
 
   useEffect(() => {
+    const unsub = poolConnection.addStatusListener(s => setIsPoolConnected(s.connected));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
     if (!isOpen) {
       voiceProfileService.stopLiveSpotter();
       isTestingRef.current = false;
+      if (poolConnection.getStatus().connected) {
+        poolConnection.stopMotor();
+      }
       return;
     }
 
@@ -82,18 +93,45 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 1. Calibrate background noise floor (jets + music)
+  // 1. Calibrate background noise floor with automatic pool jets spin-up and shut-off
   const handleCalibrateNoise = async () => {
     setIsRecording(true);
     setProgressPct(0);
+    setJetCalStatus(null);
+    const connected = poolConnection.getStatus().connected;
+
     try {
+      if (connected) {
+        setJetCalStatus('Starting pool current...');
+        poolConnection.setPace(120); // 2:00/100m steady pace
+        poolConnection.startMotor();
+
+        for (let i = 1; i <= 3; i++) {
+          setJetCalStatus(`Waiting for flow to steady (${4 - i}s)...`);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+
+        setJetCalStatus('Recording acoustic noise floor with jets on...');
+      } else {
+        setJetCalStatus('Measuring ambient noise floor...');
+      }
+
       const res = await voiceProfileService.calibrateNoiseFloor(3500, (pct, rms) => {
         setProgressPct(pct);
         setLiveRms(rms);
       });
       setNoiseFloorDb(res.noiseFloorDb);
       setNoiseFloorRms(res.noiseFloorRms);
+
+      if (connected) {
+        setJetCalStatus('Shutting off pool current...');
+        poolConnection.stopMotor();
+      }
+
+      audioCoach.playCommandChirp();
+      setJetCalStatus(connected ? 'Jets calibrated & shut off' : 'Noise floor calibrated');
     } catch (e: any) {
+      if (connected) poolConnection.stopMotor();
       alert(e?.message || 'Could not access microphone');
     } finally {
       setIsRecording(false);
@@ -239,9 +277,19 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
                 Step 1: Pool Room Acoustics
               </span>
               <p className="text-xs text-slate-600 mt-1 leading-snug">
-                Turn on your pool jets and poolside music to your usual swimming volume, then tap Calibrate.
+                {isPoolConnected
+                  ? 'HydroPulse will automatically spin up your pool jets, record the water turbulence and music acoustics, and shut the current back off.'
+                  : 'Turn on your pool jets and poolside music to normal swimming volume, then tap Calibrate.'}
               </p>
             </div>
+
+            {jetCalStatus && (
+              <div className="p-2.5 bg-water-100/80 border border-water-300 rounded-2xl text-center">
+                <span className="text-xs font-black text-water-950 block animate-pulse">
+                  {jetCalStatus}
+                </span>
+              </div>
+            )}
 
             {noiseFloorDb !== null ? (
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
@@ -264,7 +312,9 @@ export const VoiceEnrollmentModal: React.FC<VoiceEnrollmentModalProps> = ({
                   : 'bg-water-600 hover:bg-water-700 text-white border-water-600'
               }`}
             >
-              {isRecording ? `Calibrating (${progressPct}%)` : 'Sample Noise Floor (4s)'}
+              {isRecording 
+                ? `Calibrating (${progressPct}%)` 
+                : (isPoolConnected ? 'Auto-Calibrate With Pool Jets (4s)' : 'Sample Noise Floor (4s)')}
             </button>
 
             <button

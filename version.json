@@ -1,9 +1,9 @@
 {
-  "version": "2.5.0",
-  "name": "HydroPulse v2.5.0 Release",
-  "notes": "On-device personal voice match (Option B): Offline acoustic enrollment, MFCC + Fast-DTW template spotting immune to loud music and splashing water.",
+  "version": "2.5.1",
+  "name": "HydroPulse v2.5.1 Release",
+  "notes": "Fix 20-beep startup loop and touch response freeze; add auto-calibration with pool jets spin-up and shut-off",
   "publishedAt": "2026-10-30T11:15:00Z",
-  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.5.0/hydropulse.apk",
-  "apkSize": 4138136,
-  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.5.0"
+  "apkUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/download/v2.5.1/hydropulse.apk",
+  "apkSize": 4139016,
+  "htmlUrl": "https://github.com/Mors1A4/endless-pools-hydropulse/releases/tag/v2.5.1"
 }

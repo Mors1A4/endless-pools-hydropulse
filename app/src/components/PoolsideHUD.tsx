@@ -202,6 +202,7 @@ export const PoolsideHUD: React.FC<PoolsideHUDProps> = ({
     return () => {
       unsubState();
       unsubCmd();
+      voiceCommands.stopListening();
     };
   }, [isPaused, currentSegment, effectivePaceSec, settings.voiceCommandsEnabled]);
 

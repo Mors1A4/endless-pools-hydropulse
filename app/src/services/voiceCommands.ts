@@ -311,27 +311,21 @@ class VoiceCommandService {
     } else if (/\b(slower|slow\s*down|notch\s*down|less\s*speed|easier)\b/.test(text)) {
       cmd = 'slower';
     }
-    // TIER 3: Phonetic Distance & Eroded Consonant Matching (Splashing & Music Noise)
+    // TIER 3: Phonetic Spelling & Elongated Consonants (Splash & Acoustics)
     else {
       const words = text.split(/\s+/);
       for (const w of words) {
-        if (w.length >= 3 && w.length <= 6) {
-          if (levenshtein(w, 'stop') <= 1 || w === 'top' || w === 'stopp' || w === 'stob' || w === 'step' || w === 'shop') {
-            cmd = 'stop';
-            break;
-          }
-          if (levenshtein(w, 'start') <= 1 || w === 'tart' || w === 'staht' || w === 'stard') {
-            cmd = 'start';
-            break;
-          }
-          if (levenshtein(w, 'pause') <= 1 || w === 'paws' || w === 'pose' || w === 'pass') {
-            cmd = 'pause';
-            break;
-          }
-          if (levenshtein(w, 'resume') <= 1 || w === 'resum' || w === 'presume') {
-            cmd = 'resume';
-            break;
-          }
+        if (w === 'stopp' || w === 'stoppp' || w === 'staap') {
+          cmd = 'stop';
+          break;
+        }
+        if (w === 'startt' || w === 'staart' || w === 'staht') {
+          cmd = 'start';
+          break;
+        }
+        if (w === 'paws' || w === 'pauze') {
+          cmd = 'pause';
+          break;
         }
       }
     }

@@ -70,17 +70,14 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
     });
   }, [targetPaceSec, durationMinutes, hasWarmup, warmupPaceSec, hasMidBreak]);
 
-  // Voice listener hook
+  // Voice listener hook: Clean standby on home screen (prevents background microphone loop & UI lag)
   useEffect(() => {
-    if (settings.voiceCommandsEnabled) {
-      voiceCommands.startListening();
-    }
-
     const unsubState = voiceCommands.subscribeState(s => setVoiceState(s));
 
     const unsubCmd = voiceCommands.subscribe((cmd: VoiceCommand) => {
       if (cmd === 'start') {
         audioCoach.speak('Starting swim');
+        voiceCommands.stopListening();
         onStartWorkout(generatedWorkout);
       } else if (cmd === 'faster' || cmd === 'up5') {
         const delta = cmd === 'up5' ? 5 : 1;
@@ -102,8 +99,9 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
     return () => {
       unsubState();
       unsubCmd();
+      voiceCommands.stopListening();
     };
-  }, [generatedWorkout, settings.voiceCommandsEnabled, onStartWorkout]);
+  }, [generatedWorkout, onStartWorkout]);
 
   const adjustNotch = (delta: number) => {
     setTargetNotch(prev => Math.max(1, Math.min(52, prev + delta)));
@@ -131,8 +129,8 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
             <span className={`w-2 h-2 rounded-full shrink-0 ${voiceState.isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
             <span className="font-bold text-slate-700 text-[11px] sm:text-xs truncate">
               {voiceState.isListening
-                ? (voiceState.hasVoiceProfile ? 'Voice Match: Say "Start"' : 'Voice Ready: Say "Start" or "Pool Start"')
-                : 'Voice Muted'}
+                ? (voiceState.hasVoiceProfile ? 'Voice Match: Say "Start"' : 'Voice Active: Say "Start"')
+                : 'Voice Standby'}
             </span>
           </div>
 
@@ -145,7 +143,7 @@ export const QuickWorkoutBuilder: React.FC<QuickWorkoutBuilderProps> = ({
                 : 'border-water-300 text-slate-700 bg-white hover:bg-water-50'
             }`}
           >
-            {voiceState.isListening ? 'MUTE' : 'ENABLE'}
+            {voiceState.isListening ? 'MUTE' : 'LISTEN'}
           </button>
         </div>
       </div>
